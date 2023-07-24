@@ -1,4 +1,5 @@
 ﻿using AdventureWorksAPI.Models;
+using AdventureWorksAPI.Repository.IRepository;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -14,40 +15,44 @@ namespace AdventureWorksAPI.Controllers
 
     
         private readonly IConfiguration _configuration;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public AddressController(IConfiguration configuration)
+        public AddressController(IConfiguration configuration,IUnitOfWork unitOfWork)
         {
             _configuration= configuration;
+            _unitOfWork= unitOfWork;
+        }
+
+        [Route("PivotSalesTable")]
+        [HttpGet]
+        public async Task<IActionResult>PivotSalesTable()
+        {
+            DataTable dt = new DataTable();
+            SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+            SqlCommand cmd = new SqlCommand("Select country," +
+                "\r\n\tAVG(ISNULL(q1, 0)) as 'Average of quarter1'," +
+                "\r\n\tAVG(ISNULL(q1, 0)) 'Average of quarter2',\r\n\tAVG(ISNULL(q1, 0)) " +
+                "'Average of quarter1' \r\n\tfrom AdventureWorks2019.dbo.sales\r\n\tPivot(sum(sales) " +
+                "for quarter in ([q1],[q2],[q3])) as PivotTable group by country\r\n\t", conn);
+            
+            SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+            adapter.Fill(dt);
+            for(int i=0;i<dt.Rows.Count;i++)
+            {
+                Console.WriteLine(dt.Rows[i]["Country"].ToString());
+            }
+
+
+
+            return Ok();
         }
 
 
-        [Route("GetAllProducts")]
+        [Route("GetAllAddress")]
         [HttpGet]
-        public async Task<IActionResult> GetAllAddress() 
+        public async Task<IActionResult> GetAllAddress()
         {
-            List<Address> addresses = new List<Address>();
- 
-            DataTable dt= new DataTable();
-            SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-            SqlCommand cmd = new SqlCommand("Select * from Person.Address ", conn);
-            SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-            adapter.Fill(dt);
-
-            for(int i=0;i<dt.Rows.Count;i++)
-            {
-                addresses.Add(new Address
-                {
-                    AddressId = (int)dt.Rows[i]["AddressId"],
-                    AddressLine1 = (string)dt.Rows[i]["AddressLine1"],
-                    City = (string)dt.Rows[i]["City"],
-                    StateProvinceId = (int)dt.Rows[i]["StateProvinceId"],
-                    PostalCode = (string)dt.Rows[i]["PostalCode"],
-                    Rowguid = (Guid)dt.Rows[i]["Rowguid"],
-                    ModifiedDate = (DateTime)dt.Rows[i]["ModifiedDate"]
-                });
-
-            }
-            return Ok(addresses);
+            return Ok(_unitOfWork.AddressRepository.GetAll());
         }
 
 
@@ -55,29 +60,8 @@ namespace AdventureWorksAPI.Controllers
         [HttpGet]
         public async Task<IActionResult> GetOneAddress(int id)
         {
-            List<Address> addresses = new List<Address>();
 
-            DataTable dt = new DataTable();
-            SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-            SqlCommand cmd = new SqlCommand("Select * from Person.Address where AddressId="+id, conn);
-            SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-            adapter.Fill(dt);
-
-            for (int i = 0; i < dt.Rows.Count; i++)
-            {
-                addresses.Add(new Address
-                {
-                    AddressId = (int)dt.Rows[i]["AddressId"],
-                    AddressLine1 = (string)dt.Rows[i]["AddressLine1"],
-                    City = (string)dt.Rows[i]["City"],
-                    StateProvinceId = (int)dt.Rows[i]["StateProvinceId"],
-                    PostalCode = (string)dt.Rows[i]["PostalCode"],
-                    Rowguid = (Guid)dt.Rows[i]["Rowguid"],
-                    ModifiedDate = (DateTime)dt.Rows[i]["ModifiedDate"]
-                });
-
-            }
-            return Ok(addresses);
+            return Ok(_unitOfWork.AddressRepository.GetOne(id));
         }
 
 
@@ -85,18 +69,11 @@ namespace AdventureWorksAPI.Controllers
         [Route("AddContactType")]
         public async Task<IActionResult> AddContactType(ContactType address)
         {
+
+
             try 
-            { 
-            SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-                SqlCommand cmd = new SqlCommand("INSERT INTO Person.ContactType (Name, ModifiedDate) VALUES (@Name, @CreatedDate)", conn);
-                cmd.Parameters.AddWithValue("@Name", address.Name);
-                cmd.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
-                conn.Open();
-                cmd.ExecuteNonQuery();
-                conn.Close();
-
-
-                return Ok(address);
+            {
+                return Ok(_unitOfWork.ContactTypeRepository.Create(address)) ;
             }
             catch(Exception e)
             {
@@ -110,18 +87,9 @@ namespace AdventureWorksAPI.Controllers
         public async Task<IActionResult> UpdateContactType(ContactType address)
         {
             try
-            {
-                SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-                SqlCommand cmd = new SqlCommand("UPDATE Person.ContactType SET Name = @Name, ModifiedDate = @ModifiedDate WHERE ContactTypeID = @ContactTypeId", conn);
-                cmd.Parameters.AddWithValue("@Name", address.Name);
-                cmd.Parameters.AddWithValue("@ModifiedDate", DateTime.Now);
-                cmd.Parameters.AddWithValue("@ContactTypeId", address.ContactTypeId);
-
-                conn.Open();
-                cmd.ExecuteNonQuery();
-                conn.Close();
-
-                return Ok(address);
+            { 
+       
+                return Ok(_unitOfWork.ContactTypeRepository.Update(address));
             }
             catch (Exception e)
             {
@@ -133,16 +101,10 @@ namespace AdventureWorksAPI.Controllers
         [Route("DeleteContactType")]
         public async Task<IActionResult> DeleteContactType(ContactType address)
         {
+            
             try
             {
-                SqlConnection conn = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
-                SqlCommand cmd = new SqlCommand("DELETE FROM Person.ContactType WHERE ContactTypeID = @ContactTypeId", conn);
-                cmd.Parameters.AddWithValue("@ContactTypeId", address.ContactTypeId);
-                conn.Open();
-                cmd.ExecuteNonQuery();
-                conn.Close();
-
-                return Ok(address);
+                return Ok(_unitOfWork.ContactTypeRepository.Delete(address));
             }
             catch (Exception e)
             {
